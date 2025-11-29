@@ -3,10 +3,8 @@ import sqlite3
 
 from dotenv import load_dotenv
 
-
 load_dotenv()
 DB_PATH = os.getenv("DB_PATH")
-
 
 def init_db():
     """
