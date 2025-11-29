@@ -105,7 +105,7 @@ chatForm.addEventListener('submit', (event) => {
     messageInput.value = '';
     messageInput.focus();
 
-    fetch(`http://127.0.0.1:8000/gigachat?query=${encodeURIComponent(text)}`)
+    fetch(`http://127.0.0.1:8000/gigachat?query=${encodeURIComponent(text)}&session_id=${SESSION_ID}`)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
