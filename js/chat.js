@@ -87,9 +87,12 @@ chatForm.addEventListener('submit', (event) => {
 
     if (!text) return;
 
+    const adding_prompt = 'Представь, что ты программист, умеющий создавать виджеты в виде html-кода. Я хочу, чтобы css был написан внутри блока <style></> html-кода, а не отдельным файлом. То же самое с js-кодом. Создай виджет по следующему описанию:';
+    const full_query = `${adding_prompt} ${text}`;
+
     const messageData = {
         session: SESSION_ID,
-        text: text,
+        text: full_query,
         timestamp: new Date().toISOString()
     };
 
@@ -102,49 +105,90 @@ chatForm.addEventListener('submit', (event) => {
     messageInput.value = '';
     messageInput.focus();
 
-    // тут будем кидать запрос на сервер, получать ответ в json и парсить
-    const botResponseText = {
-        "text": "Привет! Вот пример кода на Python:\n\n```html\n<button>Нажми меня</button>\n```\n\nКрасиво?"
-    };
+    fetch(`http://127.0.0.1:8000/gigachat?query=${encodeURIComponent(text)}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            const botText = data.response || "Получил пустой ответ от сервера";
 
-    addBotMessage(JSON.stringify(botResponseText));
+            addBotMessage(JSON.stringify({ text: botText }));
+        })
+        .catch(err => {
+            console.error("Ошибка при запросе к серверу:", err);
+            addBotMessage(JSON.stringify({ 
+                text: "⚠️ Не могу связаться с сервером. Проверь, запущен ли FastAPI на порту 8000." 
+            }));
+        });
 });
 
 function markdownToHtml(text) {
+    if (!text) return text;
+
     const codeBlocks = [];
     let id = 0;
 
-    const processed = text.replace(/```(?:([a-zA-Z0-9+-]+)\n)?([\s\S]*?)```/g, (match, lang, code) => {
+    let processed = text.replace(/```(?:([a-zA-Z0-9+-]+)\n)?([\s\S]*?)```/g, (match, lang, code) => {
         const language = lang ? lang.trim().toLowerCase() : 'plaintext';
         const cleanCode = code.trim();
-        const placeholder = `__CODEBLOCK_${id++}__`;
+        const placeholder = `%%%CODEBLOCK_${id++}%%%`;
         codeBlocks.push({ placeholder, language, cleanCode });
         return placeholder;
     });
 
-    let html = processed
-        .replace(/\n\n+/g, '</p><p>')
-        .replace(/\n/g, '<br>')
-        .replace(/`([^`]+)`/g, '<code class="inline">$1</code>');
-
-    codeBlocks.forEach(block => {
-        let codeHtml = `<pre><code class="language-${block.language} hljs">${escapeHtml(block.cleanCode)}</code></pre>`;
-        if (block.language !== 'plaintext') {
-            codeHtml = `<pre><code class="language-${block.language} hljs">${escapeHtml(block.cleanCode)}</code><div class="code-lang-label">${block.language}</div></pre>`;
-        }
-        html = html.replace(block.placeholder, codeHtml);
+    processed = processed.replace(/^#{1,6}\s+(.*$)/gm, (match, content) => {
+        const level = match.trim().indexOf(' ');
+        return `<h${level}>${content}</h${level}>`;
     });
 
-    if (!html.startsWith('<pre>')) html = '<p>' + html + '</p>';
-    html = html.replace(/<p><\/p>/g, '');
+    processed = processed.replace(/^\s*[\*+-]\s+(.*$)/gm, '<ul><li>$1</li></ul>');
+    processed = processed.replace(/<\/ul>\s*<ul>/g, ''); 
+    processed = processed.replace(/^\s*\d+\.\s+(.*$)/gm, '<ol><li>$1</li></ol>');
+    processed = processed.replace(/<\/ol>\s*<ol>/g, ''); 
 
-    return html;
+    processed = processed.replace(/(\*\*|__)(.*?)\1/g, '<strong>$2</strong>');
+    processed = processed.replace(/(\*|_)(.*?)\1/g, '<em>$2</em>');
+
+    processed = processed.replace(/`([^`]+)`/g, (match, code) => {
+        return `<code class="inline">${escapeHtml(code)}</code>`;
+    });
+
+    processed = processed.split(/\n\n+/).map(block => {
+        block = block.trim();
+        if (!block) return '';
+        if (block.match(/^(<h[1-6]|<ul|<ol|%%%CODEBLOCK_)/)) {
+            return block;
+        }
+        return `<p>${block.replace(/\n/g, '<br>')}</p>`;
+    }).join('');
+
+    codeBlocks.forEach(block => {
+        const escapedCode = escapeHtml(block.cleanCode);
+        let codeHtml;
+        
+        if (block.language !== 'plaintext') {
+            codeHtml = `<pre><code class="language-${block.language} hljs">${escapedCode}</code><div class="code-lang-label">${block.language}</div></pre>`;
+        } else {
+            codeHtml = `<pre><code class="language-plaintext hljs">${escapedCode}</code></pre>`;
+        }
+        
+        processed = processed.replace(block.placeholder, codeHtml);
+    });
+
+    return processed;
 }
 
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    if (!text) return text;
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 function addCopyButton(codeBlock) {
