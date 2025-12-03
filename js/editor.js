@@ -1,8 +1,10 @@
+// получаем элементы: поле для ввода кода и iframe для предпросмотра
 const textarea = document.getElementById('html-code');
 const iframe = document.getElementById('preview-frame');
 
-let timeoutId;
+let timeoutId;  // идентификатор таймера для дебаунса
 
+// обновляет содержимое iframe на основе текста из textarea
 function updatePreview() {
     const code = textarea.value;
     const doc = iframe.contentDocument || iframe.contentWindow.document;
@@ -12,19 +14,22 @@ function updatePreview() {
     doc.close();
 }
 
+// реагируем на любое изменение в поле ввода
 textarea.addEventListener('input', () => {
-    clearTimeout(timeoutId);
+    clearTimeout(timeoutId);  // сбрасываем предыдущий таймер
 
+    // ждём 500 мс после последнего ввода, чтобы не обновлять слишком часто
     timeoutId = setTimeout(() => {
         updatePreview();
     }, 500);
 });
 
+// дефолтный код, который показывается при загрузке страницы
 const defaultCode = `<!DOCTYPE html>
 <style>
   body { 
       font-family: sans-serif; 
-      padding: 20px; 
+     32      padding: 20px; 
       color: #333; 
       display: flex; 
       flex-direction: column; 
@@ -51,5 +56,8 @@ const defaultCode = `<!DOCTYPE html>
 <p>Введи код, который Я тебе отправил.</p>
 <button onclick="alert('JS тоже работает!')">Нажми меня</button>`;
 
+// вставляем дефолтный код в поле ввода
 textarea.value = defaultCode;
+
+// сразу показываем предпросмотр при загрузке страницы
 updatePreview();

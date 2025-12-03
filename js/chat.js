@@ -4,7 +4,7 @@ const chatForm = document.getElementById('chat-form');
 const messageInput = document.getElementById('message-input');
 const chatWindow = document.getElementById('chat-window');
 
-// функция для отрисовки сообщения пользователя в чате
+// добавляет сообщение пользователя или бота в окно чата
 function addMessageToUI(text, type = 'sent') {
     const messageDiv = document.createElement('div');
     messageDiv.classList.add('message', type);
@@ -16,6 +16,7 @@ function addMessageToUI(text, type = 'sent') {
     const timeDiv = document.createElement('div');
     timeDiv.classList.add('message-time');
     
+    // текущее время в формате HH:MM
     const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     timeDiv.textContent = currentTime;
 
@@ -24,9 +25,11 @@ function addMessageToUI(text, type = 'sent') {
 
     chatWindow.appendChild(messageDiv);
 
+    // автоматическая прокрутка к последнему сообщению
     chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
+// отображает ответ бота с поддержкой markdown и подсветкой кода
 function addBotMessage(jsonString) {
     let data;
     try {
@@ -42,6 +45,7 @@ function addBotMessage(jsonString) {
     const messageRow = document.createElement('div');
     messageRow.classList.add('message-row');
 
+    // иконка бота
     const botIcon = document.createElement('img');
     botIcon.src = 'favicon.png';
     botIcon.alt = 'Bot';
@@ -54,7 +58,7 @@ function addBotMessage(jsonString) {
     const contentDiv = document.createElement('div');
     contentDiv.classList.add('message-content');
 
-    // Вот здесь происходит волшебство — превращаем markdown в красивый HTML
+    // преобразуем markdown в html с подсветкой синтаксиса
     contentDiv.innerHTML = markdownToHtml(text);
 
     const timeDiv = document.createElement('div');
@@ -70,16 +74,17 @@ function addBotMessage(jsonString) {
     chatWindow.appendChild(messageRow);
     chatWindow.scrollTop = chatWindow.scrollHeight;
 
-    // Подсвечиваем код после вставки
+    // подсвечиваем блоки кода и добавляем кнопку копирования
     contentDiv.querySelectorAll('pre code').forEach((block) => {
         hljs.highlightElement(block);
         addCopyButton(block);
     });
 }
 
+// приветственное сообщение от бота при загрузке страницы
 addBotMessage(JSON.stringify({text: "Привет! Чем могу помочь?"}))
 
-// функция для создания json, в который оборачиваем сообщение пользователя
+// обработчик отправки формы
 chatForm.addEventListener('submit', (event) => {
     event.preventDefault();
 
@@ -87,6 +92,7 @@ chatForm.addEventListener('submit', (event) => {
 
     if (!text) return;
 
+    // системный промпт, который заставляет модель генерировать самодостаточные html-виджеты
     const adding_prompt = 'Представь, что ты программист, умеющий создавать виджеты в виде html-кода. Я хочу, чтобы css был написан внутри блока <style></> html-кода, а не отдельным файлом. То же самое с js-кодом. Создай виджет по следующему описанию:';
     const full_query = `${adding_prompt} ${text}`;
 
@@ -100,11 +106,13 @@ chatForm.addEventListener('submit', (event) => {
     
     console.log('Отправляем на сервер JSON:', jsonString);
 
+    // показываем сообщение пользователя сразу в интерфейсе
     addMessageToUI(text, 'sent');
 
     messageInput.value = '';
     messageInput.focus();
 
+    // запрос к бэкенду (FastAPI)
     fetch(`http://127.0.0.1:8000/gigachat?query=${encodeURIComponent(text)}&session_id=${SESSION_ID}`)
         .then(response => {
             if (!response.ok) {
@@ -119,18 +127,21 @@ chatForm.addEventListener('submit', (event) => {
         })
         .catch(err => {
             console.error("Ошибка при запросе к серверу:", err);
+            // сообщение об ошибке связи с сервером
             addBotMessage(JSON.stringify({ 
-                text: "⚠️ Не могу связаться с сервером. Проверь, запущен ли FastAPI на порту 8000." 
+                text: "Не могу связаться с сервером. Проверь, запущен ли FastAPI на порту 8000." 
             }));
         });
 });
 
+// простой markdown -html конвертер с поддержкой заголовков, списков, кода и форматирования
 function markdownToHtml(text) {
     if (!text) return text;
 
     const codeBlocks = [];
     let id = 0;
 
+    // выделяем блоки кода ```...``` в плейсхолдеры
     let processed = text.replace(/```(?:([a-zA-Z0-9+-]+)\n)?([\s\S]*?)```/g, (match, lang, code) => {
         const language = lang ? lang.trim().toLowerCase() : 'plaintext';
         const cleanCode = code.trim();
@@ -139,23 +150,28 @@ function markdownToHtml(text) {
         return placeholder;
     });
 
+    // заголовки
     processed = processed.replace(/^#{1,6}\s+(.*$)/gm, (match, content) => {
         const level = match.trim().indexOf(' ');
         return `<h${level}>${content}</h${level}>`;
     });
 
+    // списки
     processed = processed.replace(/^\s*[\*+-]\s+(.*$)/gm, '<ul><li>$1</li></ul>');
     processed = processed.replace(/<\/ul>\s*<ul>/g, ''); 
     processed = processed.replace(/^\s*\d+\.\s+(.*$)/gm, '<ol><li>$1</li></ol>');
     processed = processed.replace(/<\/ol>\s*<ol>/g, ''); 
 
+    // жирный и курсив
     processed = processed.replace(/(\*\*|__)(.*?)\1/g, '<strong>$2</strong>');
     processed = processed.replace(/(\*|_)(.*?)\1/g, '<em>$2</em>');
 
+    // инлайновый код
     processed = processed.replace(/`([^`]+)`/g, (match, code) => {
         return `<code class="inline">${escapeHtml(code)}</code>`;
     });
 
+    // параграфы
     processed = processed.split(/\n\n+/).map(block => {
         block = block.trim();
         if (!block) return '';
@@ -165,6 +181,7 @@ function markdownToHtml(text) {
         return `<p>${block.replace(/\n/g, '<br>')}</p>`;
     }).join('');
 
+    // возвращаем блоки кода обратно с подсветкой
     codeBlocks.forEach(block => {
         const escapedCode = escapeHtml(block.cleanCode);
         let codeHtml;
@@ -181,6 +198,7 @@ function markdownToHtml(text) {
     return processed;
 }
 
+// экранирование html-сущностей
 function escapeHtml(text) {
     if (!text) return text;
     return text
@@ -191,6 +209,7 @@ function escapeHtml(text) {
         .replace(/'/g, "&#039;");
 }
 
+// добавляет кнопку «копировать» к блоку кода
 function addCopyButton(codeBlock) {
     if (codeBlock.parentElement.querySelector('.code-copy-btn')) return;
 
@@ -216,3 +235,40 @@ function addCopyButton(codeBlock) {
     codeBlock.parentElement.style.position = 'relative';
     codeBlock.parentElement.appendChild(button);
 }
+
+// загружает историю чата при открытии страницы
+async function loadHistory() {
+    try {
+        const response = await fetch(`http://127.0.0.1:8000/history?session_id=${SESSION_ID}`);
+        if (!response.ok) {
+            throw new Error('Не удалось загрузить историю');
+        }
+
+        const data = await response.json();
+
+        const promptPrefix = 'Представь, что ты программист, умеющий создавать виджеты в виде html-кода. Я хочу, чтобы css был написан внутри блока <style></> html-кода, а не отдельным файлом. То же самое с js-кодом. Создай виджет по следующему описанию:';
+
+        // восстанавливаем сообщения в правильном порядке
+        data.history.forEach(msg => {
+            if (msg.role === 'user') {
+                let cleanText = msg.content;
+                // убираем системный промпт из отображаемого текста
+                if (cleanText.includes(promptPrefix)) {
+                    cleanText = cleanText.replace(promptPrefix, '').trim();
+                }
+                
+                if (cleanText) {
+                    addMessageToUI(cleanText, 'sent');
+                }
+            } else if (msg.role === 'assistant') {
+                addBotMessage(JSON.stringify({ text: msg.content }));
+            }
+        });
+
+    } catch (err) {
+        console.error("Ошибка при загрузке истории:", err);
+    }
+}
+
+// запускаем загрузку истории сразу после загрузки страницы
+loadHistory();
