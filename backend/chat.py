@@ -6,7 +6,6 @@ from gigachat.models import Chat, Messages, MessagesRole
 
 from database import save_message, get_history, trim_history
 
-
 load_dotenv()
 api_key = os.getenv("API_KEY")
 

@@ -21,7 +21,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.get("/gigachat")
 def gigachat_query(query: str, session_id: str):
     """
@@ -42,7 +41,7 @@ def get_chat_history(session_id: str):
         возвращает список сообщений в формате [{"role": ..., "content": ...}, ...].
     """
     try:
-        # Получаем список сообщений из базы
+        # получаем список сообщений из базы
         history = get_history(session_id)
         return {"history": history}
     except Exception as e:
@@ -99,3 +98,4 @@ def qwen_server_status():
         return status
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
